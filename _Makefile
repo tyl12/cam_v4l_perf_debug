@@ -1,0 +1,98 @@
+OPENCV=1
+
+ARCH=x86_64
+VPATH=./src/
+OBJDIR=./obj/local/$(ARCH)/
+
+CC=gcc
+CPP=g++
+AR=ar
+ARFLAGS=rcs
+OPTS=-Ofast
+LDFLAGS= -lm -pthread
+COMMON= -Iinclude/ -Isrc/
+CFLAGS=-Wall -Wno-unknown-pragmas -Wfatal-errors -fPIC
+CPPFLAGS=
+ifeq ($(DEBUG), 1)
+OPTS=-O0 -g
+endif
+
+CFLAGS+=$(OPTS)
+
+ifeq ($(OPENCV), 1)
+COMMON+= -DOPENCV
+CFLAGS+= -DOPENCV
+LDFLAGS+= `pkg-config --libs opencv`
+COMMON+= `pkg-config --cflags opencv`
+endif
+
+#NOTE1: link with .a lib
+#PREBUILT_LIBS= 3rdparty/libs/x86_64/libpinggainet.a 3rdparty/libs/x86_64/libncnn.a
+#LDFLAGS += -L./3rdparty/libs/x86_64 -lpinggainet -lncnn
+
+#NOTE1: link with .so lib
+LDFLAGS += -L./3rdparty/libs/x86_64 -lpinggainet
+
+CFLAGS += -fopenmp
+COMMON += -DX86
+
+OBJ=CameraModule.o PostData.o test.o VideoPorts.o Vision.o v4l2cam.o utils.o camera_self_test.o camera_verification.o crop_data_generation.o crop_source.o Draw_Boxes.o
+OBJS=$(addprefix $(OBJDIR), $(OBJ))
+DEPS=$(wildcard src/*.h) Makefile
+
+# LIBVISION=libs/$(ARCH)/libvision.so
+LIBJNI=libs/$(ARCH)/libjni.so
+DEBUG_PORT=libs/$(ARCH)/debugport
+DEBUG_NATIVE=libs/$(ARCH)/debugnative
+DEBUG_CAMTEST=libs/$(ARCH)/debugcamera
+DEBUG_CROP=libs/$(ARCH)/debugcrop
+DEBUG_DRAW=libs/$(ARCH)/debugdraw
+VISION_SRC=src/CameraModule.cpp src/CameraModule.h src/Perf.h src/PostData.cpp src/PostData.h src/utils.cpp src/utils.h src/VideoPorts.cpp src/VideoPorts.h src/Vision.cpp src/Vision.h src/test.cpp
+JNI_SRC=jni/jni.cpp jni/jniapi.h
+MONITOR_SRC=src/VideoMonitor.cpp src/VideoMonitor.h
+CAMTEST_SRC=src/CameraModule.cpp src/CameraModule.h src/CameraNode.h src/camera_self_test.cpp src/utils.h src/utils.cpp src/VideoPorts.h src/VideoPorts.cpp
+GENECROP_SRC= Crop/camera_verification.cpp Crop/camera_verification.h Crop/crop_data_generation.cpp Crop/crop_data_generation.h Crop/crop_source.cpp
+DRAW_SRC=Draw/Draw_Boxes.cpp Draw/INIReader.h
+all: dir  $(DEBUG_NATIVE) $(LIBJNI) $(DEBUG_PORT) $(DEBUG_CAMTEST) $(DEBUG_CROP) $(DEBUG_DRAW)
+
+$(LIBJNI): $(JNI_SRC)  $(VISION_SRC) $(MONITOR_SRC) $(PREBUILT_LIBS)
+	#NOTE1: static link
+	#$(CPP) -shared  -std=c++11 -o $@  $(JNI_SRC) $(VISION_SRC) $(COMMON) $(CFLAGS) `pkg-config --libs opencv` -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/linux -Wl,--whole-archive $(PREBUILT_LIBS) -Wl,--no-whole-archive
+	#NOTE1: dynamic link
+	#$(CPP) -shared  -std=c++11 -o $@  $(JNI_SRC) $(VISION_SRC) $(MONITOR_SRC) $(COMMON) $(CFLAGS) `pkg-config --libs opencv` -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/linux  $(LDFLAGS)
+	$(CPP) -shared  -std=c++11 -o $@  $^ $(COMMON) $(CFLAGS) `pkg-config --libs opencv` -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/linux  $(LDFLAGS)
+	cp  ./3rdparty/libs/x86_64/libpinggainet.so  libs/$(ARCH)/
+
+$(DEBUG_PORT): src/utils.cpp src/utils.h src/VideoPorts.cpp src/VideoPorts.h
+	$(CPP) -std=c++11 -DDEBUG_CAMERA_PCI -DDEBUG_NATIVE $^ -o $@
+
+# $(DEBUG_NATIVE): $(OBJS)
+$(DEBUG_NATIVE): $(VISION_SRC) $(MONITOR_SRC) $(PREBUILT_LIBS)
+	$(CPP) -std=c++11 $(COMMON) $(CFLAGS) $^ -o $@ $(LDFLAGS) -DDEBUG_NATIVE
+
+$(DEBUG_CAMTEST): $(CAMTEST_SRC)
+	$(CPP) -std=c++11 $(COMMON) $(CFLAGS) $^ -o $@ $(LDFLAGS) -L ./ -lX11 -DDEBUG_NATIVE
+
+$(DEBUG_CROP): $(GENECROP_SRC)
+	$(CPP) -std=c++11 $(COMMON) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+
+$(DEBUG_DRAW): $(DRAW_SRC)
+	$(CPP) -std=c++11 $(COMMON) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+# $(OBJDIR)%.o: %.cpp $(DEPS) $(OBJDIR)
+# 	$(CPP) -std=c++11 $(COMMON) $(CFLAGS) -c $< -o $@ -DDEBUG_NATIVE
+
+
+
+# $(OBJDIR)%.o: %.c $(DEPS) $(OBJDIR)
+# 	$(CC) $(COMMON)  $(CFLAGS) -c $< -o $@
+
+# $(OBJDIR):
+# 	mkdir -p $(OBJDIR)
+
+dir:
+	mkdir -p libs/$(ARCH)
+
+.PHONY: clean
+
+clean:
+	rm -rf obj libs
