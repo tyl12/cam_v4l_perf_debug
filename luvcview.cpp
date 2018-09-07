@@ -39,6 +39,8 @@
 #include <signal.h>
 #include "v4l2cam.h"
 
+#include "Perf.h"
+
 struct camDev *videoIn;
 
 int main(int argc, char *argv[])
@@ -52,8 +54,12 @@ int main(int argc, char *argv[])
 	videoIn = (struct camDev *) calloc(1, sizeof(struct camDev));
 	//check_cam(videoIn, (char *) videodevice);
 
+	perf f("open>>>");
+
 	if (init_cam(videoIn, (char *) videodevice, width, height) < 0)
 		exit(1);
+
+	f.done();
 
 	//load_controls(videoIn->fd, "luvcview.cfg");  //*******load_controls
 	while(count < 100){

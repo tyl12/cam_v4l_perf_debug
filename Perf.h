@@ -4,6 +4,8 @@
 #include <cstdlib>
 #include "utils.h"
 
+#define LOG_I  printf
+
 using namespace std;
 
 class perf
