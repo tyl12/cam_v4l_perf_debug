@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
 
 	int once=0;
 	perf first("FirstFrameCost");
-	perf f("open>>>");
+	perf f("***init_cam");
 
 	if (init_cam(videoIn, (char *) videodevice, width, height) < 0)
 		exit(1);
@@ -71,10 +71,14 @@ int main(int argc, char *argv[])
 		sprintf(filename, "%d.jpg", count);
 		perf s("grab");
 //		printf("grabbing %d\n", count);
-//		if (grab_cam(videoIn, filename) < 0) {
+#if 1
+		if (grab_cam(videoIn, filename) < 0) {
+#else
 		if (grab_cam(videoIn, 0) < 0) {
+#endif
 			printf("Error grabbing\n");
 		}
+		s.done();
 if (!once){
 first.done();
 once=1;

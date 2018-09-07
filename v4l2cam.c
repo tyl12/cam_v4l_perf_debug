@@ -111,7 +111,7 @@ perf f(__FUNCTION__);
 	printf("V4L2Dev:   Device path:  %s\n", cam->videodevice);
 	cam->width = width;
 	cam->height = height;
-	//cam->fps = 30;
+//	cam->fps = 30;
 	cam->fps = 10;
 	cam->format = V4L2_PIX_FMT_MJPEG;
 	if (init_v4l2(cam) < 0) {
