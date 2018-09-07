@@ -43,6 +43,7 @@
 
 struct camDev *videoIn;
 
+
 int main(int argc, char *argv[])
 {
 	const char *videodevice = NULL;
@@ -54,6 +55,8 @@ int main(int argc, char *argv[])
 	videoIn = (struct camDev *) calloc(1, sizeof(struct camDev));
 	//check_cam(videoIn, (char *) videodevice);
 
+	int once=0;
+	perf first("FirstFrameCost");
 	perf f("open>>>");
 
 	if (init_cam(videoIn, (char *) videodevice, width, height) < 0)
@@ -66,11 +69,17 @@ int main(int argc, char *argv[])
 		/* main big loop */
 		char filename[256];
 		sprintf(filename, "%d.jpg", count);
-		printf("grabbing %d\n", count);
-		if (grab_cam(videoIn, filename) < 0) {
+		perf s("grab");
+//		printf("grabbing %d\n", count);
+//		if (grab_cam(videoIn, filename) < 0) {
+		if (grab_cam(videoIn, 0) < 0) {
 			printf("Error grabbing\n");
 		}
-		printf("grabbing %d done\n", count);
+if (!once){
+first.done();
+once=1;
+}
+//		printf("grabbing %d done\n", count);
 		count ++;
 	}
 

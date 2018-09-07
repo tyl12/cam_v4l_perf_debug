@@ -32,6 +32,8 @@
 #define FOURCC_ARGS(c)		(c) & 0xFF, ((c) >> 8) & 0xFF, ((c) >> 16) & 0xFF, ((c) >> 24) & 0xFF
 
 
+#include "Perf.h"
+
 static int debug = 0;
 
 static int init_v4l2(struct camDev *cam);
@@ -98,6 +100,7 @@ _fatal:
 
 int init_cam(struct camDev  *cam, char *device, int width, int height)
 {
+perf f(__FUNCTION__);
 	if (cam == NULL || device == NULL)
 		return -1;
 	if (width == 0 || height == 0)
@@ -108,7 +111,8 @@ int init_cam(struct camDev  *cam, char *device, int width, int height)
 	printf("V4L2Dev:   Device path:  %s\n", cam->videodevice);
 	cam->width = width;
 	cam->height = height;
-	cam->fps = 30;
+	//cam->fps = 30;
+	cam->fps = 10;
 	cam->format = V4L2_PIX_FMT_MJPEG;
 	if (init_v4l2(cam) < 0) {
 		printf("V4L2Dev:  Init v4L2 failed !! exit fatal, %s\n", cam->videodevice);
@@ -239,6 +243,7 @@ static int init_v4l2(struct camDev *cam)
 	int requested_format_found = 0, fallback_format = -1;
 
 	printf("V4L2Dev: Init V4L2 %s\n", cam->videodevice);
+perf f("init_v4l2:: query & enum");
 
 	if ((cam->fd = open(cam->videodevice, O_RDWR)) == -1) {
 		perror("V4L2Dev: ERROR opening V4L interface");
@@ -249,25 +254,25 @@ static int init_v4l2(struct camDev *cam)
 	if (ret < 0) {
 		printf("V4L2Dev: Error opening device %s: unable to query device.\n",
 				cam->videodevice);
-		goto _fatal;
+		return -1;
 	}
 
 	if ((cam->cap.capabilities & V4L2_CAP_VIDEO_CAPTURE) == 0) {
 		printf("V4L2Dev: Error opening device %s: video capture not supported.\n",
 				cam->videodevice);
-		goto _fatal;
+		return -1;
 	}
 
 	if (!(cam->cap.capabilities & V4L2_CAP_STREAMING)) {
 		printf("V4L2Dev: %s does not support streaming i/o\n", cam->videodevice);
-		goto _fatal;
+		return -1;
 	}
 
 	// Enumerate the supported formats to check whether the requested one
 	// is available. If not, we try to fall back to YUYV.
 	if(enum_frame_formats(cam->fd, device_formats, ARRAY_SIZE(device_formats))) {
 		printf("V4L2Dev: Unable to enumerate frame formats");
-		goto _fatal;
+		return -1;
 	}
 	for(i = 0; i < ARRAY_SIZE(device_formats) && device_formats[i]; i++) {
 		if(device_formats[i] == cam->format) {
@@ -292,9 +297,11 @@ static int init_v4l2(struct camDev *cam)
 		// The requested format is not supported and no fallback format is available
 		printf("V4L2Dev: ERROR: Requested frame format "FOURCC_FORMAT" is not available "
 				"and no fallback format was found.\n", FOURCC_ARGS(cam->format));
-		goto _fatal;
+		return -1;
 	}
+f.done();
 
+perf f2("init_v4l2:: s_fmt & fps");
 	// Set pixel format and frame size
 	memset(&cam->fmt, 0, sizeof(struct v4l2_format));
 	cam->fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -305,7 +312,7 @@ static int init_v4l2(struct camDev *cam)
 	ret = ioctl(cam->fd, VIDIOC_S_FMT, &cam->fmt);
 	if (ret < 0) {
 		perror("V4L2Dev: Unable to set format");
-		goto _fatal;
+		return -1;
 	}
 	if ((cam->fmt.fmt.pix.width != cam->width) ||
 			(cam->fmt.fmt.pix.height != cam->height)) {
@@ -333,7 +340,7 @@ static int init_v4l2(struct camDev *cam)
 	ret = ioctl(cam->fd, VIDIOC_S_PARM, setfps);
 	if(ret == -1) {
 		perror("V4L2Dev: Unable to set frame rate");
-		goto _fatal;
+		return -1;
 	}
 	ret = ioctl(cam->fd, VIDIOC_G_PARM, setfps); 
 	if(ret == 0) {
@@ -351,9 +358,12 @@ static int init_v4l2(struct camDev *cam)
 	}
 	else {
 		perror("V4L2Dev: Unable to read out current frame rate");
-		goto _fatal;
+		return -1;
 	}
 #endif
+f2.done();
+
+perf f3("init_v4l2:: req_buf");
 	/* request buffers */
 	memset(&cam->rb, 0, sizeof(struct v4l2_requestbuffers));
 	cam->rb.count = NB_BUFFER;
@@ -363,7 +373,7 @@ static int init_v4l2(struct camDev *cam)
 	ret = ioctl(cam->fd, VIDIOC_REQBUFS, &cam->rb);
 	if (ret < 0) {
 		perror("V4L2Dev: Unable to allocate buffers");
-		goto _fatal;
+		return -1;
 	}
 	/* map the buffers */
 	for (i = 0; i < NB_BUFFER; i++) {
@@ -374,7 +384,7 @@ static int init_v4l2(struct camDev *cam)
 		ret = ioctl(cam->fd, VIDIOC_QUERYBUF, &cam->buf);
 		if (ret < 0) {
 			perror("V4L2Dev: Unable to query buffer");
-			goto _fatal;
+			return -1;
 		}
 		if (debug)
 			printf("V4L2Dev: length: %u offset: %u\n", cam->buf.length,
@@ -384,11 +394,13 @@ static int init_v4l2(struct camDev *cam)
 				cam->buf.m.offset);
 		if (cam->mem[i] == MAP_FAILED) {
 			perror("V4L2Dev: Unable to map buffer");
-			goto _fatal;
+			return -1;
 		}
 		if (debug)
 			printf("V4L2Dev: Buffer mapped at address %p.\n", cam->mem[i]);
 	}
+f3.done();
+perf f4("init_v4l2:: q_buf");
 	/* Queue the buffers. */
 	for (i = 0; i < NB_BUFFER; ++i) {
 		memset(&cam->buf, 0, sizeof(struct v4l2_buffer));
@@ -398,12 +410,15 @@ static int init_v4l2(struct camDev *cam)
 		ret = ioctl(cam->fd, VIDIOC_QBUF, &cam->buf);
 		if (ret < 0) {
 			perror("V4L2Dev: Unable to queue buffer");
-			goto _fatal;;
+			return -1;;
 		}
 	}
+f4.done();
+perf f5("init_v4l2:: streamon");
 	if (video_enable(cam))
-		goto _fatal;
+		return -1;
 
+f5.done();
 	return 0;
 
 _fatal:

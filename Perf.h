@@ -4,8 +4,6 @@
 #include <cstdlib>
 #include "utils.h"
 
-#define LOG_I  printf
-
 using namespace std;
 
 class perf
@@ -23,14 +21,14 @@ public:
         over = false;
         sTag = tag;
         startTime = get_time();
-        LOG_I("PERF-%s: start", sTag.c_str());
+        printf("PERF-%s: start\n", sTag.c_str());
     }
     void start(string tag)
     {
         over = false;
         sTag = tag;
         startTime = get_time();
-        LOG_I("PERF-%s: start", sTag.c_str());
+        printf("PERF-%s: start\n", sTag.c_str());
     }
 
     virtual ~perf()
@@ -45,7 +43,7 @@ public:
     {
         startTime = get_time();
         over = false;
-        LOG_I("PERF-%s: restart", sTag.c_str());
+        printf("PERF-%s: restart\n", sTag.c_str());
     }
 
     void done()
@@ -53,12 +51,12 @@ public:
         if (!over)
         {
             auto end = get_time();
-            LOG_I("PERF-%s: done, cost %.2f sec", sTag.c_str(), (end - startTime) / 1000.0);
+            printf("PERF-%s: done, cost %.2f sec\n", sTag.c_str(), (end - startTime) / 1000.0);
             over = true;
         }
         else
         {
-            LOG_I("PERF-%s: already done", sTag.c_str());
+            printf("PERF-%s: already done\n", sTag.c_str());
         }
     }
 };
